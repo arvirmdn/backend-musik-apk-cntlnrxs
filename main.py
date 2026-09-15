@@ -7,6 +7,8 @@ import json
 import os
 import threading
 import uuid
+import hashlib
+import secrets
 from typing import Optional
 
 import httpx
@@ -66,6 +68,20 @@ class PlaylistRename(BaseModel):
 
 class AddTrackToPlaylist(BaseModel):
     track: Track
+
+
+class RegisterRequest(BaseModel):
+    username: str
+    password: str
+
+
+class LoginRequest(BaseModel):
+    username: str
+    password: str
+
+
+class TokenRequest(BaseModel):
+    token: str
 
 
 # ---------------------------------------------------------------------------
@@ -238,6 +254,87 @@ def remove_track_from_playlist(playlist_id: str, track_id: str):
                 _save_db(db)
                 return p
     raise HTTPException(404, "Playlist tidak ditemukan")
+
+
+# ---------------------------------------------------------------------------
+# Auth — akun (Nama + Sandi) disimpan di db.json yang sama, jadi TIDAK
+# hilang lagi walau app di-uninstall / ganti HP. Sandi disimpan sebagai
+# hash (PBKDF2-SHA256 + salt per akun), bukan plain text.
+# ---------------------------------------------------------------------------
+def _hash_password(password: str, salt: str) -> str:
+    return hashlib.pbkdf2_hmac(
+        "sha256", password.encode("utf-8"), bytes.fromhex(salt), 100_000
+    ).hex()
+
+
+def _normalize_username(username: str) -> str:
+    return username.strip().lower()
+
+
+@app.post("/api/auth/register")
+def register(body: RegisterRequest):
+    username = body.username.strip()
+    key = _normalize_username(username)
+    password = body.password
+
+    if not key:
+        raise HTTPException(400, "Nama tidak boleh kosong")
+    if len(password) < 4:
+        raise HTTPException(400, "Sandi minimal 4 karakter")
+
+    with _db_lock:
+        db = _load_db()
+        users = db.setdefault("users", {})
+        if key in users:
+            raise HTTPException(409, f'Nama "{username}" sudah dipakai. Coba nama lain.')
+
+        salt = secrets.token_hex(16)
+        token = secrets.token_hex(24)
+        users[key] = {
+            "username": username,
+            "salt": salt,
+            "hash": _hash_password(password, salt),
+        }
+        db.setdefault("sessions", {})[token] = key
+        _save_db(db)
+
+    return {"username": username, "token": token}
+
+
+@app.post("/api/auth/login")
+def login(body: LoginRequest):
+    key = _normalize_username(body.username)
+
+    with _db_lock:
+        db = _load_db()
+        user = db.get("users", {}).get(key)
+        if not user or _hash_password(body.password, user["salt"]) != user["hash"]:
+            raise HTTPException(401, "Nama atau sandi salah")
+
+        token = secrets.token_hex(24)
+        db.setdefault("sessions", {})[token] = key
+        _save_db(db)
+
+    return {"username": user["username"], "token": token}
+
+
+@app.get("/api/auth/me")
+def auth_me(token: str):
+    db = _load_db()
+    key = db.get("sessions", {}).get(token)
+    user = db.get("users", {}).get(key) if key else None
+    if not user:
+        raise HTTPException(401, "Sesi tidak valid, silakan masuk lagi")
+    return {"username": user["username"]}
+
+
+@app.post("/api/auth/logout")
+def logout(body: TokenRequest):
+    with _db_lock:
+        db = _load_db()
+        db.get("sessions", {}).pop(body.token, None)
+        _save_db(db)
+    return {"ok": True}
 
 
 # ---------------------------------------------------------------------------

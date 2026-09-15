@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Musikin</title>
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="app">
+    <aside class="sidebar">
+      <div class="logo">🎵 Musikin</div>
+      <nav class="nav">
+        <button class="nav-item active" data-view="search">Cari</button>
+        <button class="nav-item" data-view="history">Baru diputar</button>
+      </nav>
+      <div class="playlists-section">
+        <div class="playlists-header">
+          <span>Playlist</span>
+          <button id="newPlaylistBtn" title="Buat playlist">+</button>
+        </div>
+        <ul id="playlistList" class="playlist-list"></ul>
+      </div>
+    </aside>
+
+    <main class="content">
+      <header class="topbar">
+        <input id="searchInput" type="text" placeholder="Cari lagu atau artis..." />
+      </header>
+
+      <section id="searchView" class="view">
+        <div id="searchResults" class="track-list"></div>
+      </section>
+
+      <section id="historyView" class="view hidden">
+        <div class="view-title-row">
+          <h2>Baru diputar</h2>
+          <button id="clearHistoryBtn">Hapus riwayat</button>
+        </div>
+        <div id="historyResults" class="track-list"></div>
+      </section>
+
+      <section id="playlistView" class="view hidden">
+        <div class="view-title-row">
+          <h2 id="playlistViewTitle">Playlist</h2>
+          <button id="renamePlaylistBtn">Ubah nama</button>
+        </div>
+        <div id="playlistResults" class="track-list"></div>
+      </section>
+    </main>
+  </div>
+
+  <!-- Mini player -->
+  <div id="miniPlayer" class="mini-player hidden">
+    <img id="miniThumb" class="mini-thumb" src="" alt="" />
+    <div class="mini-info">
+      <div id="miniTitle" class="mini-title"></div>
+      <div id="miniArtist" class="mini-artist"></div>
+    </div>
+    <button id="miniPlayPause" class="icon-btn">▶</button>
+    <button id="expandPlayer" class="icon-btn">⌃</button>
+  </div>
+
+  <!-- Full player sheet -->
+  <div id="playerSheet" class="player-sheet hidden">
+    <button id="collapsePlayer" class="icon-btn collapse-btn">⌄</button>
+    <img id="sheetThumb" class="sheet-thumb" src="" alt="" />
+    <div id="sheetTitle" class="sheet-title"></div>
+    <div id="sheetArtist" class="sheet-artist"></div>
+    <input id="seekBar" type="range" min="0" max="100" value="0" />
+    <div class="time-row">
+      <span id="timeCurrent">0:00</span>
+      <span id="timeDuration">0:00</span>
+    </div>
+    <div class="sheet-controls">
+      <button id="sheetPlayPause" class="icon-btn big">▶</button>
+    </div>
+    <div class="sheet-actions">
+      <select id="addToPlaylistSelect">
+        <option value="">+ Tambah ke playlist</option>
+      </select>
+    </div>
+  </div>
+
+  <audio id="audio" preload="none"></audio>
+  <script src="app.js"></script>
+</body>
+</html>

@@ -84,6 +84,17 @@ class TokenRequest(BaseModel):
     token: str
 
 
+class ChangePasswordRequest(BaseModel):
+    token: str
+    old_password: str
+    new_password: str
+
+
+class UpdateUsernameRequest(BaseModel):
+    token: str
+    new_username: str
+
+
 # ---------------------------------------------------------------------------
 # yt-dlp helper
 # ---------------------------------------------------------------------------
@@ -356,6 +367,60 @@ def logout(body: TokenRequest):
         db.get("sessions", {}).pop(body.token, None)
         _save_db(db)
     return {"ok": True}
+
+
+def _current_key(db: dict, token: str) -> str:
+    key = db.get("sessions", {}).get(token)
+    if not key or key not in db.get("users", {}):
+        raise HTTPException(401, "Sesi tidak valid, silakan masuk lagi")
+    return key
+
+
+@app.post("/api/auth/change-password")
+def change_password(body: ChangePasswordRequest):
+    if len(body.new_password) < 4:
+        raise HTTPException(400, "Sandi baru minimal 4 karakter")
+
+    with _db_lock:
+        db = _load_db()
+        key = _current_key(db, body.token)
+        user = db["users"][key]
+        if _hash_password(body.old_password, user["salt"]) != user["hash"]:
+            raise HTTPException(401, "Sandi lama salah")
+
+        salt = secrets.token_hex(16)
+        user["salt"] = salt
+        user["hash"] = _hash_password(body.new_password, salt)
+        _save_db(db)
+
+    return {"ok": True}
+
+
+@app.post("/api/auth/update-username")
+def update_username(body: UpdateUsernameRequest):
+    new_username = body.new_username.strip()
+    new_key = _normalize_username(new_username)
+    if not new_key:
+        raise HTTPException(400, "Nama tidak boleh kosong")
+
+    with _db_lock:
+        db = _load_db()
+        key = _current_key(db, body.token)
+        if new_key != key and new_key in db.get("users", {}):
+            raise HTTPException(409, f'Nama "{new_username}" sudah dipakai. Coba nama lain.')
+
+        user = db["users"].pop(key)
+        user["username"] = new_username
+        db["users"][new_key] = user
+
+        # Pindahin semua sesi (termasuk token yang sedang dipakai) ke key baru
+        sessions = db.setdefault("sessions", {})
+        for tok, sess_key in sessions.items():
+            if sess_key == key:
+                sessions[tok] = new_key
+        _save_db(db)
+
+    return {"username": new_username}
 
 
 # ---------------------------------------------------------------------------

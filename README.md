@@ -34,12 +34,25 @@ Backend FastAPI + yt-dlp buat search & stream audio dari YouTube, plus riwayat
 - `DELETE /api/playlists/{id}` — hapus playlist
 - `POST /api/playlists/{id}/tracks` — tambah lagu ke playlist `{track: {...}}`
 - `DELETE /api/playlists/{id}/tracks/{track_id}` — hapus lagu dari playlist
+- `POST /api/auth/register` — daftar akun baru `{username, password}` → `{username, token}`
+- `POST /api/auth/login` — masuk `{username, password}` → `{username, token}`
+- `GET /api/auth/me?token=...` — cek sesi token masih valid → `{username}`
+- `POST /api/auth/logout` — keluar `{token}`
 
 ## Catatan
 
-- Data riwayat & playlist disimpan di file `db.json` (dibuat otomatis di server).
-  Ini storage sederhana single-user — cukup buat pemakaian sendiri, belum ada
-  sistem akun/login.
+- Data riwayat, playlist, dan akun disimpan di file `db.json` (dibuat otomatis
+  di server). Ini storage sederhana single-user/file-based — cukup buat
+  pemakaian sendiri.
+- Sandi akun disimpan sebagai hash (PBKDF2-SHA256 + salt per akun), bukan
+  plain text.
+- **Penting:** kalau route `/api/auth/*` di atas belum ada di server yang
+  ter-deploy (versi lama), request `POST` ke path itu bakal "kepental" ke
+  static file handler (`app.mount("/", StaticFiles(...))` di baris paling
+  bawah `main.py`) — dan StaticFiles cuma terima method `GET`/`HEAD`, jadi
+  balikin error `405 Method Not Allowed`. Kalau ketemu error ini di app,
+  berarti `main.py` di GitHub/Railway belum sinkron dengan versi terbaru —
+  upload ulang `main.py` ini ke repo, biarin Railway auto-deploy ulang.
 - Kalau volume Railway di-reset (redeploy dari awal tanpa persistent disk),
   `db.json` bisa ikut kehapus. Untuk data yang lebih awet, nanti bisa
   di-upgrade ke database beneran (misal SQLite dengan volume, atau Postgres).

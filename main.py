@@ -122,12 +122,26 @@ def _search_youtube(query: str, limit: int = 20) -> list[dict]:
     return results
 
 
-def _get_audio_stream_url(video_id: str) -> tuple[str, dict]:
+def _get_audio_stream_url(video_id: str) -> tuple[str, dict, str]:
     with yt_dlp.YoutubeDL(YDL_STREAM_OPTS) as ydl:
         info = ydl.extract_info(f"https://www.youtube.com/watch?v={video_id}", download=False)
     url = info["url"]
     headers = info.get("http_headers", {}) or {}
-    return url, headers
+    ext = info.get("ext") or "m4a"
+    return url, headers, ext
+
+
+# yt-dlp sering ngambil audio terbaik dalam format webm/opus, bukan cuma
+# mp4/m4a — kalau Content-Type yang dikirim gak sesuai format aslinya,
+# player di app (just_audio/ExoPlayer) gagal baca ("Source error").
+_AUDIO_MIME_BY_EXT = {
+    "m4a": "audio/mp4",
+    "mp4": "audio/mp4",
+    "webm": "audio/webm",
+    "opus": "audio/ogg",
+    "ogg": "audio/ogg",
+    "mp3": "audio/mpeg",
+}
 
 
 # ---------------------------------------------------------------------------
@@ -146,12 +160,14 @@ def search(q: str, limit: int = 20):
 @app.get("/api/stream/{video_id}")
 async def stream(video_id: str):
     try:
-        url, extra_headers = _get_audio_stream_url(video_id)
+        url, extra_headers, ext = _get_audio_stream_url(video_id)
     except Exception as e:  # noqa: BLE001
         raise HTTPException(502, f"Gagal ambil stream: {e}") from e
 
     headers = {"User-Agent": "Mozilla/5.0"}
     headers.update(extra_headers)
+
+    media_type = _AUDIO_MIME_BY_EXT.get(ext, "audio/mp4")
 
     async def proxy():
         async with httpx.AsyncClient(timeout=None) as client:
@@ -159,7 +175,7 @@ async def stream(video_id: str):
                 async for chunk in resp.aiter_bytes(chunk_size=65536):
                     yield chunk
 
-    return StreamingResponse(proxy(), media_type="audio/mp4")
+    return StreamingResponse(proxy(), media_type=media_type)
 
 
 # ---------------------------------------------------------------------------

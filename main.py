@@ -93,6 +93,10 @@ YDL_SEARCH_OPTS = {
     "extract_flat": "in_playlist",
     "skip_download": True,
     "default_search": "ytsearch",
+    # IP server cloud (Railway dkk) sering kena "Sign in to confirm you're
+    # not a bot" dari YouTube. Pura-pura jadi client Android biasanya lolos
+    # dari pengecekan ini tanpa perlu cookies/login.
+    "extractor_args": {"youtube": {"player_client": ["android", "web"]}},
 }
 
 YDL_STREAM_OPTS = {
@@ -100,6 +104,7 @@ YDL_STREAM_OPTS = {
     "no_warnings": True,
     "format": "bestaudio/best",
     "noplaylist": True,
+    "extractor_args": {"youtube": {"player_client": ["android", "web"]}},
 }
 
 

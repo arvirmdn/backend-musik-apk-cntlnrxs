@@ -29,6 +29,26 @@ app.add_middleware(
 )
 
 # ---------------------------------------------------------------------------
+# Cookies YouTube — dibutuhin biar server Railway ini gak kena blokir
+# "Sign in to confirm you're not a bot" dari YouTube. Isi variabel
+# environment YT_COOKIES (di Railway > Variables) dengan seluruh isi file
+# cookies.txt yang diexport dari browser (pas login YouTube) pakai extension
+# semacam "Get cookies.txt LOCALLY". Ditulis ke file sekali pas startup;
+# kalau env var-nya kosong, aplikasi tetap jalan tanpa cookies (bakal balik
+# ke error bot-check kayak sebelumnya).
+COOKIES_PATH = os.path.join(os.path.dirname(__file__), "cookies.txt")
+_cookies_env = os.environ.get("YT_COOKIES")
+if _cookies_env:
+    with open(COOKIES_PATH, "w", encoding="utf-8") as f:
+        f.write(_cookies_env)
+
+
+def _with_cookies(opts: dict) -> dict:
+    if os.path.exists(COOKIES_PATH):
+        return {**opts, "cookiefile": COOKIES_PATH}
+    return opts
+
+# ---------------------------------------------------------------------------
 # Storage sederhana (file JSON) — history & playlist
 # ---------------------------------------------------------------------------
 DB_PATH = os.path.join(os.path.dirname(__file__), "db.json")
@@ -135,7 +155,7 @@ YDL_STREAM_OPTS = {
 
 
 def _search_youtube(query: str, limit: int = 20) -> list[dict]:
-    with yt_dlp.YoutubeDL(YDL_SEARCH_OPTS) as ydl:
+    with yt_dlp.YoutubeDL(_with_cookies(YDL_SEARCH_OPTS)) as ydl:
         info = ydl.extract_info(f"ytsearch{limit}:{query}", download=False)
     results = []
     for entry in info.get("entries", []) or []:
@@ -165,12 +185,12 @@ YDL_STREAM_OPTS_FALLBACK = {
 def _get_audio_stream_url(video_id: str) -> tuple[str, dict, str]:
     video_url = f"https://www.youtube.com/watch?v={video_id}"
     try:
-        with yt_dlp.YoutubeDL(YDL_STREAM_OPTS) as ydl:
+        with yt_dlp.YoutubeDL(_with_cookies(YDL_STREAM_OPTS)) as ydl:
             info = ydl.extract_info(video_url, download=False)
     except Exception:  # noqa: BLE001
         # Video ini mungkin gak punya format progresif (client android) —
         # coba lagi pakai client web + format apa aja daripada gagal total.
-        with yt_dlp.YoutubeDL(YDL_STREAM_OPTS_FALLBACK) as ydl:
+        with yt_dlp.YoutubeDL(_with_cookies(YDL_STREAM_OPTS_FALLBACK)) as ydl:
             info = ydl.extract_info(video_url, download=False)
     url = info["url"]
     headers = info.get("http_headers", {}) or {}

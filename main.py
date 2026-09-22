@@ -113,9 +113,24 @@ YDL_SEARCH_OPTS = {
 YDL_STREAM_OPTS = {
     "quiet": True,
     "no_warnings": True,
-    "format": "bestaudio/best",
+    # Backend cuma nge-forward byte mentah dari URL yang dikasih yt-dlp
+    # (lihat proxy() di bawah) — itu cuma jalan buat format "progresif"
+    # (satu file lengkap, bisa di-GET langsung). Format DASH (protokol
+    # http_dash_segments) atau HLS (m3u8) itu manifest + banyak segmen
+    # terpisah, kalau dipaksa di-forward mentah hasilnya bukan audio yang
+    # valid → ExoPlayer di app gagal baca ("Source error"). Makanya
+    # keduanya dikecualikan di sini.
+    "format": (
+        "bestaudio[protocol!=http_dash_segments][protocol!=m3u8_native]"
+        "[protocol!=m3u8]/best[protocol!=http_dash_segments]"
+        "[protocol!=m3u8_native][protocol!=m3u8]"
+    ),
     "noplaylist": True,
-    "extractor_args": {"youtube": {"player_client": ["android", "web"]}},
+    # Client "android" biasanya ngasih URL progresif yang lebih konsisten
+    # dibanding "web" (yang makin sering cuma ngasih format DASH/SABR
+    # belakangan ini), jadi dipakai sendirian di sini (bukan gabungan
+    # kayak di YDL_SEARCH_OPTS).
+    "extractor_args": {"youtube": {"player_client": ["android"]}},
 }
 
 
@@ -138,9 +153,25 @@ def _search_youtube(query: str, limit: int = 20) -> list[dict]:
     return results
 
 
+YDL_STREAM_OPTS_FALLBACK = {
+    "quiet": True,
+    "no_warnings": True,
+    "format": "bestaudio/best",
+    "noplaylist": True,
+    "extractor_args": {"youtube": {"player_client": ["web"]}},
+}
+
+
 def _get_audio_stream_url(video_id: str) -> tuple[str, dict, str]:
-    with yt_dlp.YoutubeDL(YDL_STREAM_OPTS) as ydl:
-        info = ydl.extract_info(f"https://www.youtube.com/watch?v={video_id}", download=False)
+    video_url = f"https://www.youtube.com/watch?v={video_id}"
+    try:
+        with yt_dlp.YoutubeDL(YDL_STREAM_OPTS) as ydl:
+            info = ydl.extract_info(video_url, download=False)
+    except Exception:  # noqa: BLE001
+        # Video ini mungkin gak punya format progresif (client android) —
+        # coba lagi pakai client web + format apa aja daripada gagal total.
+        with yt_dlp.YoutubeDL(YDL_STREAM_OPTS_FALLBACK) as ydl:
+            info = ydl.extract_info(video_url, download=False)
     url = info["url"]
     headers = info.get("http_headers", {}) or {}
     ext = info.get("ext") or "m4a"
